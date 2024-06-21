@@ -18,14 +18,14 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["에이토스", "마돈", "S5", "벤지", "라파", "시스템식스", "에스웍스", "에스웍"]
+keywords = ["에이토스", "마돈", "S5","벤지","라파","시스템식스","에스웍스","에스웍"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
 
 # 텔레그램 메시지 전송 함수
-def send_telegram_message(message):
-    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
+def send_telegram_message(message, post_link):
+    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message} {post_link}'
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
@@ -40,44 +40,41 @@ def load_checked_posts():
         return set()
 
 # 새로운 확인된 게시물 로그 파일에 추가
-def save_checked_post(post_title, post_link):
+def save_checked_post(post_title):
     with open(log_file_path, 'a', encoding='utf-8') as file:
-        file.write(f"{post_title}|{post_link}\n")
+        file.write(post_title + '\n')
 
 # 사이트 크롤링 함수
 def crawl_site():
     try:
         print("크롤링 시작...")
         checked_posts = load_checked_posts()
-        
+
         # User-Agent 헤더 추가
         req = Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        links = [link.find('a')['href'] for link in titles]
-        
+        links = soup.find_all('a', attrs={'class': 'list_title_B'})
+
         if not titles:
             print("게시글을 찾을 수 없습니다.")
-        
+
         for i, title in enumerate(titles):
             post_title = title.text.strip()
-            post_link = f"https://corearoadbike.com/board/{links[i]}"
-            
-            # 게시물 링크 수정
-            post_link = post_link.replace("./board.php", "board.php")
-            
-            if f"{post_title}|{post_link}" in checked_posts:
+            if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
-            
+
+            post_link = f"https://corearoadbike.com/board/{links[i].get('href')}"
             print(f"제목: {post_title}")
+            print(f"링크: {post_link}")
             if keyword_pattern.search(post_title):
                 print(f"키워드 발견: {post_title}")
-                send_telegram_message(f"게시물 발견: {post_title}\n{post_link}")
-                save_checked_post(post_title, post_link)  # 확인된 게시물을 로그 파일에 저장
-                checked_posts.add(f"{post_title}|{post_link}")  # 확인된 게시물 추가
-    
+                send_telegram_message(f"게시물 발견: {post_title}", post_link)
+                save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
+                checked_posts.add(post_title)  # 확인된 게시물 추가
+
     except HTTPError as e:
         print(f"HTTP Error: {e.code} - {e.reason}")
     except Exception as e:
@@ -100,7 +97,7 @@ if __name__ == "__main__":
 
     # 1분마다 crawl_site 함수를 실행하도록 스케줄 설정
     schedule.every(1).minutes.do(crawl_site)
-    
+
     print("스케줄러 시작...")
     while True:
         next_run_time = datetime.now() + timedelta(minutes=1)
