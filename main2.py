@@ -24,8 +24,8 @@ keywords = ["에이토스", "마돈", "S5","벤지","라파","시스템식스","
 keyword_pattern = re.compile('|'.join(keywords))
 
 # 텔레그램 메시지 전송 함수
-def send_telegram_message(message):
-    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
+def send_telegram_message(message, post_url):
+    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message + " - " + post_url}'
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
@@ -40,9 +40,13 @@ def load_checked_posts():
         return set()
 
 # 새로운 확인된 게시물 로그 파일에 추가
-def save_checked_post(post_title):
+def save_checked_post(post_title, post_url):
     with open(log_file_path, 'a', encoding='utf-8') as file:
-        file.write(post_title + '\n')
+        file.write(post_title + ',' + post_url + '\n')
+
+# 게시물 URL 구성 함수
+def get_post_url(g_id):
+    return f"https://corearoadbike.com/board/board.php?g_id={g_id}&t_id=Menu01Top6&sort=wr_last+desc"
 
 # 사이트 크롤링 함수
 def crawl_site():
@@ -62,23 +66,19 @@ def crawl_site():
         
         for title in titles:
             post_title = title.text.strip()
-            if post_title in checked_posts:
-                continue  # 이미 확인된 게시물은 무시
+            post_link = title.find('a')['href']
+            g_id = post_link.split('=')[-1]
+            post_url = get_post_url(g_id)
             
-            # 게시글 링크 추출
-            link = title.find('a')
-            if link and 'href' in link.attrs:
-                post_url = f"https://corearoadbike.com/board/{link['href']}"
-            else:
-                post_url = "링크를 찾을 수 없습니다."
+            if post_title + ',' + post_url in checked_posts:
+                continue  # 이미 확인된 게시물은 무시
             
             print(f"제목: {post_title}")
             if keyword_pattern.search(post_title):
                 print(f"키워드 발견: {post_title}")
-                message = f"게시물 발견: {post_title}\n링크: {post_url}"
-                send_telegram_message(message)
-                save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
-                checked_posts.add(post_title)  # 확인된 게시물 추가
+                send_telegram_message(f"게시물 발견: {post_title}", post_url)
+                save_checked_post(post_title, post_url)  # 확인된 게시물을 로그 파일에 저장
+                checked_posts.add(post_title + ',' + post_url)  # 확인된 게시물 추가
     
     except HTTPError as e:
         print(f"HTTP Error: {e.code} - {e.reason}")
