@@ -67,6 +67,7 @@ def crawl_site():
             
             # 게시물 링크 수정
             post_link = post_link.replace("./board.php", "board.php")
+            post_link += "&t_id=Menu01Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_last+desc"
             
             if f"{post_title}|{post_link}" in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
