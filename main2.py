@@ -51,36 +51,26 @@ def crawl_site():
         checked_posts = load_checked_posts()
         
         # User-Agent 헤더 추가
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(target_url, headers=headers)
-        response.raise_for_status()  # 오류 발생 시 예외 발생
+        req = Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+        response = urlopen(req)
         print("사이트 응답 수신 완료")
+        soup = BeautifulSoup(response, "html.parser")
+        titles = soup.find_all('td', attrs={'class': 'list_title_B'})
         
-        soup = BeautifulSoup(response.text, "html.parser")
-        posts = soup.find_all('tr', class_=lambda x: x and x.startswith('list_row'))
+        if not titles:
+            print("게시글을 찾을 수 없습니다.")
         
-        if not posts:
-            print("게시글을 찾을 수 없습니다. HTML 구조를 확인해주세요.")
-            return
-        
-        print(f"총 {len(posts)}개의 게시글을 찾았습니다.")
-        
-        for post in posts:
-            title_element = post.find('td', class_='list_title')
-            if not title_element:
-                continue
-            
-            link_element = title_element.find('a')
-            if not link_element:
-                continue
-            
-            post_title = link_element.text.strip()
-            post_url = 'https://corearoadbike.com/board/' + link_element['href']
-            
+        for title in titles:
+            post_title = title.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
+            
+            # 게시글 링크 추출
+            link = title.find('a')
+            if link and 'href' in link.attrs:
+                post_url = 'https://corearoadbike.com/board/' + link['href']
+            else:
+                post_url = "링크를 찾을 수 없습니다."
             
             print(f"제목: {post_title}")
             if keyword_pattern.search(post_title):
