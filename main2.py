@@ -65,20 +65,25 @@ def crawl_site():
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
-            post_link = f"https://corearoadbike.com/board/board.php?t_id=Menu01Top6&category=%25ED%258C%2590%25EB%25A7%25A4&mode=view&idx={title.find_parent('tr')['idx']}"
-            print(f"제목: {post_title}")
-            print(f"링크: {post_link}")
-            if keyword_pattern.search(post_title):
-                print(f"키워드 발견: {post_title}")
-                message = f"게시물 발견: {post_title}\n{post_link}"
-                send_telegram_message(message)
-                save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
-                checked_posts.add(post_title)  # 확인된 게시물 추가
+            post_link_element = title.find_parent('tr').find('a')
+            if post_link_element:
+                post_link = f"https://corearoadbike.com{post_link_element['href']}"
+                print(f"제목: {post_title}")
+                print(f"링크: {post_link}")
+                if keyword_pattern.search(post_title):
+                    print(f"키워드 발견: {post_title}")
+                    message = f"게시물 발견: {post_title}\n{post_link}"
+                    send_telegram_message(message)
+                    save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
+                    checked_posts.add(post_title)  # 확인된 게시물 추가
+            else:
+                print(f"게시물 링크를 찾을 수 없습니다: {post_title}")
     
     except HTTPError as e:
         print(f"HTTP Error: {e.code} - {e.reason}")
     except Exception as e:
         print(f"예외 발생: {e}")
+
 
 # 남은 시간 계산 및 표시 함수
 def display_remaining_time(next_run_time):
