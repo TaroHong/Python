@@ -6,44 +6,30 @@ import schedule
 import time
 from datetime import datetime, timedelta
 import re
-from urllib.parse import urljoin
+from urllib.parse import urlparse, parse_qs, urlencode
 
 # 크롤링할 URL
 target_url = "https://corearoadbike.com/board/board.php?t_id=Menu01Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_last+desc"
 
-# 텔레그램 봇 정보
-TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
-TELEGRAM_CHAT_ID = '7321984689'
+# ... (나머지 코드는 동일)
 
-# 확인된 게시물 저장용 파일 경로
-log_file_path = 'checked_posts.log'
-
-# 검색할 키워드 리스트
-keywords = ["에이토스", "마돈", "S5","벤지","라파","시스템식스","에스웍스","에스웍"]
-
-# 정규 표현식으로 키워드 패턴 생성
-keyword_pattern = re.compile('|'.join(keywords))
-
-# 텔레그램 메시지 전송 함수
-def send_telegram_message(message):
-    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
-    response = requests.get(send_text)
-    print(f"텔레그램 메시지 전송 상태: {response.status_code}")
-    return response.json()
-
-# 로그 파일에서 확인된 게시물 읽기
-def load_checked_posts():
-    try:
-        with open(log_file_path, 'r', encoding='utf-8') as file:
-            checked_posts = set(file.read().splitlines())
-        return checked_posts
-    except FileNotFoundError:
-        return set()
-
-# 새로운 확인된 게시물 로그 파일에 추가
-def save_checked_post(post_title):
-    with open(log_file_path, 'a', encoding='utf-8') as file:
-        file.write(post_title + '\n')
+def create_full_url(base_url, href):
+    parsed_base = urlparse(base_url)
+    parsed_href = urlparse(href)
+    
+    # 기존 URL의 쿼리 파라미터 가져오기
+    base_query = parse_qs(parsed_base.query)
+    
+    # 새 URL의 쿼리 파라미터 가져오기
+    new_query = parse_qs(parsed_href.query)
+    
+    # 두 쿼리 파라미터 합치기 (새 URL의 파라미터가 우선)
+    combined_query = {**base_query, **new_query}
+    
+    # URL 재구성
+    final_url = f"{parsed_base.scheme}://{parsed_base.netloc}{parsed_href.path}?{urlencode(combined_query, doseq=True)}"
+    
+    return final_url
 
 # 사이트 크롤링 함수
 def crawl_site():
@@ -69,7 +55,7 @@ def crawl_site():
             # 게시글 링크 추출
             link = title.find('a')
             if link and 'href' in link.attrs:
-                post_url = urljoin(target_url, link['href'])
+                post_url = create_full_url(target_url, link['href'])
             else:
                 post_url = "링크를 찾을 수 없습니다."
             
@@ -86,27 +72,4 @@ def crawl_site():
     except Exception as e:
         print(f"예외 발생: {e}")
 
-# 남은 시간 계산 및 표시 함수
-def display_remaining_time(next_run_time):
-    while True:
-        now = datetime.now()
-        remaining_time = next_run_time - now
-        if remaining_time.total_seconds() <= 0:
-            break
-        print(f"다음 실행까지 남은 시간: {remaining_time}")
-        time.sleep(1)
-
-# 메인 함수
-if __name__ == "__main__":
-    # 초기에 한 번 실행하여 테스트
-    crawl_site()
-
-    # 1분마다 crawl_site 함수를 실행하도록 스케줄 설정
-    schedule.every(1).minutes.do(crawl_site)
-    
-    print("스케줄러 시작...")
-    while True:
-        next_run_time = datetime.now() + timedelta(minutes=1)
-        display_remaining_time(next_run_time)
-        schedule.run_pending()
-        time.sleep(1)
+# ... (나머지 코드는 동일)
