@@ -6,6 +6,7 @@ import schedule
 import time
 from datetime import datetime, timedelta
 import re
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 
 # 크롤링할 URL
 target_url = "https://corearoadbike.com/board/board.php?t_id=Menu01Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_last+desc"
@@ -44,6 +45,31 @@ def save_checked_post(post_title):
     with open(log_file_path, 'a', encoding='utf-8') as file:
         file.write(post_title + '\n')
 
+# URL 생성 함수
+def create_full_url(base_url, href):
+    parsed_base = urlparse(base_url)
+    parsed_href = urlparse(href)
+    
+    # href가 상대 경로인 경우
+    if not parsed_href.netloc:
+        full_url = urljoin(base_url, href)
+    else:
+        full_url = href
+    
+    # 기존 URL의 쿼리 파라미터 가져오기
+    base_query = parse_qs(parsed_base.query)
+    
+    # 새 URL의 쿼리 파라미터 가져오기
+    new_query = parse_qs(urlparse(full_url).query)
+    
+    # 두 쿼리 파라미터 합치기
+    combined_query = {**base_query, **new_query}
+    
+    # URL 재구성
+    final_url = urlparse(full_url)._replace(query=urlencode(combined_query, doseq=True)).geturl()
+    
+    return final_url
+
 # 사이트 크롤링 함수
 def crawl_site():
     try:
@@ -68,7 +94,7 @@ def crawl_site():
             # 게시글 링크 추출
             link = title.find('a')
             if link and 'href' in link.attrs:
-                post_url = 'https://corearoadbike.com/board/' + link['href']
+                post_url = create_full_url(target_url, link['href'])
             else:
                 post_url = "링크를 찾을 수 없습니다."
             
