@@ -61,12 +61,13 @@ def crawl_site():
         if not titles:
             print("게시글을 찾을 수 없습니다.")
 
-        for i, title in enumerate(titles):
+       for i, title in enumerate(titles):
             post_title = title.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
 
-            post_link = f"https://corearoadbike.com/board/{links[i].get('href')}"
+            post_link = links[i].get('href')
+            post_link = f"https://corearoadbike.com/board/{post_link}"
             print(f"제목: {post_title}")
             print(f"링크: {post_link}")
             if keyword_pattern.search(post_title):
