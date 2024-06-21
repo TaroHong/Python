@@ -24,8 +24,8 @@ keywords = ["에이토스", "마돈", "S5","벤지","라파","시스템식스","
 keyword_pattern = re.compile('|'.join(keywords))
 
 # 텔레그램 메시지 전송 함수
-def send_telegram_message(message, post_link):
-    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message} {post_link}'
+def send_telegram_message(message):
+    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&parse_mode=HTML&text={message}'
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
@@ -49,33 +49,40 @@ def crawl_site():
     try:
         print("크롤링 시작...")
         checked_posts = load_checked_posts()
-
+        
         # User-Agent 헤더 추가
         req = Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
-        titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        links = soup.find_all('a', attrs={'class': 'list_title_B'})
-
-        if not titles:
+        posts = soup.find_all('tr', attrs={'class': 'list_row'})
+        
+        if not posts:
             print("게시글을 찾을 수 없습니다.")
-
-       for i, title in enumerate(titles):
-            post_title = title.text.strip()
+        
+        for post in posts:
+            title_element = post.find('td', attrs={'class': 'list_title_B'})
+            if not title_element:
+                continue
+            
+            post_title = title_element.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
-
-            post_link = links[i].get('href')
-            post_link = f"https://corearoadbike.com/board/{post_link}"
+            
+            link_element = title_element.find('a')
+            if not link_element:
+                continue
+            
+            post_url = 'https://corearoadbike.com/board/' + link_element['href']
+            
             print(f"제목: {post_title}")
-            print(f"링크: {post_link}")
             if keyword_pattern.search(post_title):
                 print(f"키워드 발견: {post_title}")
-                send_telegram_message(f"게시물 발견: {post_title}", post_link)
+                message = f"게시물 발견: <a href='{post_url}'>{post_title}</a>"
+                send_telegram_message(message)
                 save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
                 checked_posts.add(post_title)  # 확인된 게시물 추가
-
+    
     except HTTPError as e:
         print(f"HTTP Error: {e.code} - {e.reason}")
     except Exception as e:
@@ -98,7 +105,7 @@ if __name__ == "__main__":
 
     # 1분마다 crawl_site 함수를 실행하도록 스케줄 설정
     schedule.every(1).minutes.do(crawl_site)
-
+    
     print("스케줄러 시작...")
     while True:
         next_run_time = datetime.now() + timedelta(minutes=1)
