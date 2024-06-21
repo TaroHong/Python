@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["에이토스", "마돈", "S5","벤지","라파","시스템식스","에스웍스","에스웍"]
+keywords = ["에이토스", "마돈", "S5", "벤지", "라파", "시스템식스", "에스웍스", "에스웍"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -64,6 +64,10 @@ def crawl_site():
         for i, title in enumerate(titles):
             post_title = title.text.strip()
             post_link = f"https://corearoadbike.com/board/{links[i]}"
+            
+            # 게시물 링크 수정
+            post_link = post_link.replace("./board.php", "board.php")
+            
             if f"{post_title}|{post_link}" in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
