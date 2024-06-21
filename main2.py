@@ -66,7 +66,10 @@ def crawl_site():
                 continue  # 이미 확인된 게시물은 무시
             
             # 게시물 번호 추출
-            post_no = title.find_parent('tr')['data-no']
+            post_no = title.find_parent('tr').get('data-no', None)
+            if post_no is None:
+                print(f"게시물 번호를 찾을 수 없습니다: {post_title}")
+                continue
             
             # 게시물 링크 생성
             post_link = f"https://corearoadbike.com/board/board.php?g_id=recycle02&t_id=Menu01Top6&sort=wr_last+desc&no={post_no}"
