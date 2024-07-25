@@ -15,10 +15,10 @@ TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
 TELEGRAM_CHAT_ID = '7321984689'
 
 # 확인된 게시물 저장용 파일 경로
-log_file_path = 'checked_posts.log'
+log_file_path = 'checked_posts2.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200","2.0"]
+keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -97,12 +97,13 @@ if __name__ == "__main__":
     # 초기에 한 번 실행하여 테스트
     crawl_site()
 
-    # 1분마다 crawl_site 함수를 실행하도록 스케줄 설정
+    # 5분마다 crawl_site 함수를 실행하도록 스케줄 설정
     schedule.every(1).minutes.do(crawl_site)
     
     print("스케줄러 시작...")
     while True:
-        next_run_time = datetime.now() + timedelta(minutes=1)
+        next_run_time = datetime.now() + timedelta(minutes=5)
         display_remaining_time(next_run_time)
         schedule.run_pending()
         time.sleep(1)
+
