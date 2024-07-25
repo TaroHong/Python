@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = "https://corearoadbike.com/board/board.php?t_id=Menu02Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_2+desc&sch_W=title&sch_O=AND&sch_T=%ED%8C%8C%EC%9B%8C"
+target_url = ""
 
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
@@ -25,7 +25,7 @@ keyword_pattern = re.compile('|'.join(keywords))
 
 # 텔레그램 메시지 전송 함수
 def send_telegram_message(message):
-    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
+    send_text = f'{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
@@ -55,15 +55,17 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
+        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        content = soup.find_all('td', attrs={'class': 'list_content_B'})
+        contents = soup.find_all('td', attrs={'class': 'list_content_B'})  # 수정된 부분
         
         if not titles:
             print("게시글을 찾을 수 없습니다.")
         
-        for title in titles:
-            post_title = title.text.strip()
-            post_content = content.text.strip()
+        for i in range(len(titles)):
+            post_title = titles[i].text.strip()
+            post_content = contents[i].text.strip() if i < len(contents) else ""  # 내용을 올바르게 가져옵니다.
+
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
@@ -74,7 +76,6 @@ def crawl_site():
                 send_telegram_message(f"내용: {post_content}")
                 save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
                 checked_posts.add(post_title)  # 확인된 게시물 추가
-    
     
     except HTTPError as e:
         print(f"HTTP Error: {e.code} - {e.reason}")
@@ -105,4 +106,3 @@ if __name__ == "__main__":
         display_remaining_time(next_run_time)
         schedule.run_pending()
         time.sleep(1)
-
