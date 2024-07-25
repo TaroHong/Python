@@ -61,8 +61,8 @@ def crawl_site():
             print("게시글을 찾을 수 없습니다.")
         
         for title in titles:
-            post_title = titles[i].text.strip()
-            post_content = contents[i].text.strip()
+            post_title = titles.text.strip()
+            post_content = contents.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
