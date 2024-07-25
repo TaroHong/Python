@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = "https://corearoadbike.com/board/board.php?g_id=recycle02&t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4&page=5"
+target_url = "https://corearoadbike.com/board/board.php?g_id=recycle02&t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4&page=5" 
 
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워","파워미터","아씨오마","듀오","가민랠리","RS200"]
+keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -27,8 +27,9 @@ keyword_pattern = re.compile('|'.join(keywords))
 def send_telegram_message(message):
     send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
     response = requests.get(send_text)
-    print(f"텔레그램 메시지 전송 상태: {response.status_code}")
+    print(f"텔레그램 메시지 전송 상태: {response.status_code}, 응답: {response.json()}")
     return response.json()
+
 # 로그 파일에서 확인된 게시물 읽기
 def load_checked_posts():
     try:
@@ -54,6 +55,7 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
+        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
         contents = soup.find_all('td', attrs={'class': 'list_content_B'}) 
         
@@ -62,7 +64,7 @@ def crawl_site():
         
         for i in range(len(titles)):
             post_title = titles[i].text.strip()
-            post_content = contents[i].text.strip() if i < len(contents) else ""  # 내용을 올바르게 가져옵니다.
+            post_content = contents[i].text.strip() if i < len(contents) else ""
 
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
