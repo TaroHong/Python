@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = "https://corearoadbike.com/board/board.php?t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4"  # 여기에 크롤링할 URL을 입력하세요.
-
+target_url = "https://corearoadbike.com/board/board.php?t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4"
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
 TELEGRAM_CHAT_ID = '7321984689'
