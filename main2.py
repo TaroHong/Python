@@ -56,12 +56,14 @@ def crawl_site():
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        
+        contents = soup.find_all('td', attrs={'class': 'list_content_B'})
+
         if not titles:
             print("게시글을 찾을 수 없습니다.")
         
         for title in titles:
             post_title = title.text.strip()
+            post_content = contents.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
@@ -69,6 +71,7 @@ def crawl_site():
             if keyword_pattern.search(post_title):
                 print(f"키워드 발견: {post_title}")
                 send_telegram_message(f"게시물 발견: {post_title}")
+                send_telegram_message(f"내용: {post_content}")
                 save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
                 checked_posts.add(post_title)  # 확인된 게시물 추가
     
