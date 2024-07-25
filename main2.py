@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워","파워미터","아씨오마","듀오","가민랠리","RS200"]
+keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200","2.0"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -55,15 +55,17 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
+        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
         contents = soup.find_all('td', attrs={'class': 'list_content_B'})
 
         if not titles:
             print("게시글을 찾을 수 없습니다.")
         
-        for title in titles:
-            post_title = title.text.strip()
-            post_content = contents.text.strip()
+        for i in range(len(titles)):
+            post_title = titles[i].text.strip()
+            post_content = contents[i].text.strip() if i < len(contents) else ""  # 인덱스를 사용하여 내용을 가져옴
+            
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
