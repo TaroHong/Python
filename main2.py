@@ -56,7 +56,7 @@ def crawl_site():
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        content = soup.find_all('td', attrs=<'class': 'list__content_B')
+        content = soup.find_all('td', attrs={'class': 'list_content_B'})
         
         if not titles:
             print("게시글을 찾을 수 없습니다.")
@@ -105,3 +105,4 @@ if __name__ == "__main__":
         display_remaining_time(next_run_time)
         schedule.run_pending()
         time.sleep(1)
+
