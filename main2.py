@@ -9,6 +9,7 @@ import re
 
 # 크롤링할 URL
 target_url = "https://corearoadbike.com/board/board.php?t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4"
+
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
 TELEGRAM_CHAT_ID = '7321984689'
@@ -17,7 +18,7 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200"]
+keywords = ["파워","파워미터","아씨오마","듀오","가민랠리","RS200"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -26,7 +27,7 @@ keyword_pattern = re.compile('|'.join(keywords))
 def send_telegram_message(message):
     send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
     response = requests.get(send_text)
-    print(f"텔레그램 메시지 전송 상태: {response.status_code}, 응답: {response.json()}")
+    print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
 
 # 로그 파일에서 확인된 게시물 읽기
@@ -54,17 +55,13 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
-        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        contents = soup.find_all('td', attrs={'class': 'list_content_B'}) 
         
         if not titles:
             print("게시글을 찾을 수 없습니다.")
         
-        for i in range(len(titles)):
-            post_title = titles[i].text.strip()
-            post_content = contents[i].text.strip() if i < len(contents) else ""
-
+        for title in titles:
+            post_title = title.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
@@ -72,7 +69,6 @@ def crawl_site():
             if keyword_pattern.search(post_title):
                 print(f"키워드 발견: {post_title}")
                 send_telegram_message(f"게시물 발견: {post_title}")
-                send_telegram_message(f"내용: {post_content}")
                 save_checked_post(post_title)  # 확인된 게시물을 로그 파일에 저장
                 checked_posts.add(post_title)  # 확인된 게시물 추가
     
