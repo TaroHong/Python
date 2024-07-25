@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = ""
+target_url = "https://corearoadbike.com/board/board.php?g_id=recycle02&t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4&page=5"
 
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
@@ -25,11 +25,10 @@ keyword_pattern = re.compile('|'.join(keywords))
 
 # 텔레그램 메시지 전송 함수
 def send_telegram_message(message):
-    send_text = f'{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
+    send_text = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}'
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
-
 # 로그 파일에서 확인된 게시물 읽기
 def load_checked_posts():
     try:
@@ -55,9 +54,8 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
-        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        contents = soup.find_all('td', attrs={'class': 'list_content_B'})  # 수정된 부분
+        contents = soup.find_all('td', attrs={'class': 'list_content_B'}) 
         
         if not titles:
             print("게시글을 찾을 수 없습니다.")
