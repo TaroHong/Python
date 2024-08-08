@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = "https://corearoadbike.com/board/board.php?t_id=Menu02Top6&category=%ED%8C%90%EB%A7%A4"
+target_url = "https://corearoadbike.com/board/board.php?t_id=Menu02Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_last+desc"
 
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = '7321984689'
 log_file_path = 'checked_posts3.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워", "파워미터", "아씨오마", "듀오","가민랠리", "RS200"]
+keywords = ["파워", "파워미터", "아씨오마", "듀오","우노","가민랠리", "RS200","벡터3"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
