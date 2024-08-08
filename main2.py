@@ -8,17 +8,18 @@ from datetime import datetime, timedelta
 import re
 
 # 크롤링할 URL
-target_url = "https://corearoadbike.com/board/board.php?t_id=Menu08Top6&category=%ED%8C%90%EB%A7%A4"
+target_url = "https://corearoadbike.com/board/board.php?t_id=Menu02Top6&category=%25ED%258C%2590%25EB%25A7%25A4&sort=wr_last+desc
+#부품 업데이트 게시글
 
 # 텔레그램 봇 정보
 TELEGRAM_BOT_TOKEN = '7272596527:AAE9de-Uw58CheN-ayHQoL1_MSPxur2O0b4'
 TELEGRAM_CHAT_ID = '7321984689'
 
 # 확인된 게시물 저장용 파일 경로
-log_file_path = 'checked_posts2.log'
+log_file_path = 'checked_posts.log'
 
 # 검색할 키워드 리스트
-keywords = ["파워", "파워미터", "아씨오마", "듀오", "가민랠리", "RS200"]
+keywords = ["파워","파워미터","아씨오마","듀오","우노","가민랠리","RS200","벡터3"]
 
 # 정규 표현식으로 키워드 패턴 생성
 keyword_pattern = re.compile('|'.join(keywords))
@@ -29,7 +30,6 @@ def send_telegram_message(message):
     response = requests.get(send_text)
     print(f"텔레그램 메시지 전송 상태: {response.status_code}")
     return response.json()
-
 # 로그 파일에서 확인된 게시물 읽기
 def load_checked_posts():
     try:
@@ -55,17 +55,15 @@ def crawl_site():
         response = urlopen(req)
         print("사이트 응답 수신 완료")
         soup = BeautifulSoup(response, "html.parser")
-        
         titles = soup.find_all('td', attrs={'class': 'list_title_B'})
-        contents = soup.find_all('td', attrs={'class': 'list_content_B'})
-
+        contents = soup.find_all('td', attrs={'class': 'list_content_B'}) 
+        
         if not titles:
             print("게시글을 찾을 수 없습니다.")
         
-        for i in range(len(titles)):
-            post_title = titles[i].text.strip()
-            post_content = contents[i].text.strip() if i < len(contents) else ""  # 인덱스를 사용하여 내용을 가져옴
-            
+        for title in titles:
+            post_title = titles.text.strip()
+            post_content = contents.text.strip()
             if post_title in checked_posts:
                 continue  # 이미 확인된 게시물은 무시
             
@@ -97,13 +95,12 @@ if __name__ == "__main__":
     # 초기에 한 번 실행하여 테스트
     crawl_site()
 
-    # 5분마다 crawl_site 함수를 실행하도록 스케줄 설정
+    # 1분마다 crawl_site 함수를 실행하도록 스케줄 설정
     schedule.every(1).minutes.do(crawl_site)
     
     print("스케줄러 시작...")
     while True:
-        next_run_time = datetime.now() + timedelta(minutes=5)
+        next_run_time = datetime.now() + timedelta(minutes=1)
         display_remaining_time(next_run_time)
         schedule.run_pending()
         time.sleep(1)
-
