@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import re
 from urllib.parse import quote  # URL 인코딩을 위한 모듈 추가
 
+
 # 크롤링할 URL
 target_url = "https://corearoadbike.com/board/board.php?t_id=Menu30Top6&category=%25ED%258C%2590%25EB%25A7%25A4&category2=%25EB%2594%2594%25EC%258A%25A4%25ED%2581%25AC&sort=wr_2+desc"
 
