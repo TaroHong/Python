@@ -1,0 +1,230 @@
+import asyncio
+import time
+import logging
+from pathlib import Path
+from datetime import datetime
+from typing import Optional
+
+import requests
+from bleak import BleakScanner, BleakClient
+
+# ============================================================
+# CONFIG
+# ============================================================
+AGENT_ID = "PC_B"
+USER_ID = "user_2"
+USER_NAME = "B_User"
+
+TARGET_MAC = "F7:C1:5C:62:3A:60"
+
+INGEST_URL = "http://127.0.0.1:9000/api/ingest"
+
+HRM_CHAR_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+CCCD_UUID = "00002902-0000-1000-8000-00805f9b34fb"
+SEND_INTERVAL_SEC = 3
+HR_STALE_SEC = 10
+HTTP_TIMEOUT = 5
+
+CONNECT_TIMEOUT_SEC = 8
+RECONNECT_DELAY_SEC = 3
+
+MIN_RSSI = -62          
+
+CONNECT_DELAY_SEC = 0.5
+
+# ============================================================
+# STATE
+# ============================================================
+scanner: Optional[BleakScanner] = None
+client: Optional[BleakClient] = None
+
+connecting = False
+ble_connected = False
+
+current_bpm: Optional[int] = None
+last_hr_timestamp: Optional[float] = None
+
+# ============================================================
+# LOG
+# ============================================================
+def log(msg: str):
+    logging.info(msg)
+# ============================================================
+# HR CALLBACK
+# ============================================================
+def hr_callback(sender: int, data: bytearray):
+    global current_bpm, last_hr_timestamp, ble_connected
+
+    if not data:
+        return
+
+    flags = data[0]
+    bpm = data[1] if not (flags & 0x01) else int.from_bytes(data[1:3], "little")
+    if bpm <= 0:
+        return
+
+    current_bpm = bpm
+    last_hr_timestamp = time.time()
+    ble_connected = True
+    log(f"❤️ HR = {bpm}")
+
+# ============================================================
+# ENABLE HRM
+# ============================================================
+async def enable_hrm(client: BleakClient) -> bool:
+    services = await client.get_services()
+    for svc in services:
+        for ch in svc.characteristics:
+            if ch.uuid.lower() == HRM_CHAR_UUID:
+                await client.start_notify(HRM_CHAR_UUID, hr_callback)
+                for d in ch.descriptors:
+                    if d.uuid.lower() == CCCD_UUID:
+                        await client.write_gatt_descriptor(d.handle, b"\x01\x00")
+                return True
+    return False
+
+# ============================================================
+# CONNECT FLOW
+# ============================================================
+async def connect_device(device):
+    global client, connecting, ble_connected, last_hr_timestamp, scanner
+
+    if connecting or ble_connected:
+        return
+
+    connecting = True
+
+    try:
+        log("⏳ short delay before connect...")
+        await asyncio.sleep(CONNECT_DELAY_SEC)
+
+        log(f"🎯 CONNECTING to {device.address}")
+        if scanner:
+            await scanner.stop()
+
+        client = BleakClient(device)
+        await client.connect(timeout=CONNECT_TIMEOUT_SEC)
+
+        ble_connected = True
+        last_hr_timestamp = None
+        log("✅ BLE CONNECTED")
+
+        if not await enable_hrm(client):
+            raise RuntimeError("HRM enable failed")
+
+        while client.is_connected:
+            await asyncio.sleep(1)
+
+        log("⚠️ BLE DISCONNECTED")
+
+    except Exception as e:
+        log(f"❌ CONNECT ERROR: {repr(e)}")
+
+    finally:
+        ble_connected = False
+        connecting = False
+        last_hr_timestamp = None
+
+        try:
+            if client:
+                await client.disconnect()
+        except Exception:
+            pass
+
+        log(f"🔁 RECONNECT IN {RECONNECT_DELAY_SEC}s")
+        await asyncio.sleep(RECONNECT_DELAY_SEC)
+        await start_scanning()
+# ============================================================
+# FILE LOG SETUP (추가)
+# ============================================================
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "agent.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(),  # 기존 콘솔 출력 유지
+    ],
+)
+
+# ============================================================
+# SCAN CALLBACK
+# ============================================================
+def detection_callback(device, adv):
+    if device.address != TARGET_MAC:
+        return
+
+    rssi = adv.rssi
+    log(f"SCAN HIT → addr={device.address} rssi={rssi}")
+
+    if rssi is None or rssi < MIN_RSSI:
+        log("RSSI too weak → ignore")
+        return
+
+    asyncio.create_task(connect_device(device))
+
+# ============================================================
+# START SCANNING
+# ============================================================
+async def start_scanning():
+    global scanner
+    log("🔍 START BLE SCANNING (callback)")
+    scanner = BleakScanner(detection_callback)
+    await scanner.start()
+
+# ============================================================
+# SERVER SEND
+# ============================================================
+def build_payload(t: str, d: dict):
+    return {
+        "agent_id": AGENT_ID,
+        "user_id": USER_ID,
+        "user_name": USER_NAME,
+        "timestamp": int(time.time()),
+        "type": t,
+        "data": d,
+    }
+
+def send_payload(payload: dict):
+    try:
+        requests.post(INGEST_URL, json=payload, timeout=HTTP_TIMEOUT)
+    except Exception:
+        pass
+
+async def send_loop():
+    while True:
+        now = time.time()
+
+        if not ble_connected:
+            send_payload(build_payload("status", {
+                "ble_connected": False,
+                "reason": "BLE_DISCONNECTED",
+            }))
+        elif last_hr_timestamp:
+            age = int(now - last_hr_timestamp)
+            if age <= HR_STALE_SEC:
+                send_payload(build_payload("hr_data", {
+                    "bpm": current_bpm,
+                    "ble_connected": True,
+                    "last_hr_age_sec": age,
+                    "ble_mac": TARGET_MAC,
+                }))
+
+        await asyncio.sleep(SEND_INTERVAL_SEC)
+
+# ============================================================
+# MAIN
+# ============================================================
+async def main():
+    log("BLE FAST + STABLE + SERVER MODE STARTED")
+    await asyncio.gather(
+        start_scanning(),
+        send_loop(),
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
