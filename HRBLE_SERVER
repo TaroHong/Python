@@ -1,0 +1,303 @@
+import json
+import time
+import requests
+import sqlite3
+from pathlib import Path
+from typing import Dict, List
+from collections import deque
+from datetime import datetime
+
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
+# SOLAPI SDK
+from solapi import SolapiMessageService
+from solapi.model import RequestMessage
+
+
+LOW_HR_THRESHOLD = 75
+LOW_HR_RECOVER_THRESHOLD = 95
+OBSERVE_WINDOW_SEC = 600
+
+TELEGRAM_BOT_TOKEN = 
+TELEGRAM_CHAT_ID = 
+
+
+SOLAPI_API_KEY = 
+SOLAPI_API_SECRET = 
+SOLAPI_SENDER = 
+SOLAPI_RECEIVER = 
+
+
+# ============================================================
+# FASTAPI
+# ============================================================
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# SQLITE 설정
+# ============================================================
+DB_DIR = Path("data")
+DB_DIR.mkdir(exist_ok=True)
+DB_PATH = DB_DIR / "hr.db"
+
+conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS hr_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    ts INTEGER NOT NULL,
+    bpm INTEGER NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE INDEX IF NOT EXISTS idx_user_ts
+ON hr_data (user_id, ts)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS server_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    level TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    message TEXT,
+    ts INTEGER NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE INDEX IF NOT EXISTS idx_event_user_ts
+ON server_events (user_id, ts)
+""")
+
+cursor.execute("PRAGMA journal_mode=WAL;")
+cursor.execute("PRAGMA synchronous=NORMAL;")
+conn.commit()
+
+
+# ============================================================
+# DB 저장 함수
+# ============================================================
+def save_hr(user_id: str, ts: int, bpm: int):
+    cursor.execute(
+        "INSERT INTO hr_data (user_id, ts, bpm) VALUES (?, ?, ?)",
+        (user_id, ts, bpm)
+    )
+    conn.commit()
+
+
+def save_event(user_id: str | None, level: str, event_type: str, message: str):
+    ts = int(time.time())
+    cursor.execute(
+        """
+        INSERT INTO server_events (user_id, level, event_type, message, ts)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (user_id, level, event_type, message, ts)
+    )
+    conn.commit()
+
+
+# ============================================================
+# TELEGRAM
+# ============================================================
+def send_telegram_alert(text: str):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+    }
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print("[TELEGRAM ERROR]", repr(e))
+
+
+# ============================================================
+# SOLAPI 문자 발송
+# ============================================================
+message_service = SolapiMessageService(
+    api_key=SOLAPI_API_KEY,
+    api_secret=SOLAPI_API_SECRET
+)
+
+def send_sms_solapi(text: str):
+    message = RequestMessage(
+        from_=SOLAPI_SENDER,
+        to=SOLAPI_RECEIVER,
+        text=text,
+    )
+    try:
+        message_service.send(message)
+        print("📨 SMS 발송 성공")
+    except Exception as e:
+        print("❌ SMS 발송 실패:", str(e))
+
+
+# ============================================================
+# 전역 변수
+# ============================================================
+ws_clients: List[WebSocket] = []
+current_state: Dict[str, dict] = {}
+low_hr_sessions: Dict[str, dict] = {}
+
+
+# ============================================================
+# 로그관리
+# ============================================================
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "ingest.jsonl"
+
+def write_log(payload: dict):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+# ============================================================
+# 저심박 핸들링
+# ============================================================
+def handle_low_hr(user_id: str, bpm: int, user_name: str):
+
+    now = time.time()
+    session = low_hr_sessions.get(user_id)
+
+    if session is None:
+        low_hr_sessions[user_id] = {
+            "start_ts": now,
+            "samples": [bpm],
+        }
+
+        msg = f"저심박 감지: {bpm} BPM"
+        save_event(user_id, "WARN", "LOW_START", msg)
+
+        send_telegram_alert(msg)
+        send_sms_solapi(msg)
+        return
+
+    session["samples"].append(bpm)
+    elapsed = now - session["start_ts"]
+
+    if elapsed < OBSERVE_WINDOW_SEC:
+        return
+
+    avg_hr = int(sum(session["samples"]) / len(session["samples"]))
+
+    if avg_hr < LOW_HR_THRESHOLD:
+        msg = f"저심박 지속: avg={avg_hr}"
+        save_event(user_id, "WARN", "LOW_CONTINUE", msg)
+
+        send_telegram_alert(msg)
+        send_sms_solapi(msg)
+
+        low_hr_sessions[user_id] = {
+            "start_ts": now,
+            "samples": [],
+        }
+    else:
+        msg = f"심박 회복: avg={avg_hr}"
+        save_event(user_id, "INFO", "RECOVER", msg)
+
+        send_telegram_alert(msg)
+        send_sms_solapi(msg)
+
+        low_hr_sessions.pop(user_id, None)
+
+
+# ============================================================
+# INGEST API
+# ============================================================
+@app.post("/api/ingest")
+async def ingest(payload: dict):
+
+    write_log(payload)
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        return {"status": "ignored"}
+
+    state = current_state.setdefault(user_id, {})
+    state.update({
+        "last_update": payload.get("timestamp"),
+        "type": payload.get("type"),
+        "data": payload.get("data"),
+    })
+
+    if payload.get("type") == "hr_data":
+        bpm = payload.get("data", {}).get("bpm")
+        ts = payload.get("timestamp")
+
+        if bpm is not None and ts is not None:
+
+            save_hr(user_id, ts, bpm)
+
+            if user_id in low_hr_sessions:
+                if bpm < LOW_HR_RECOVER_THRESHOLD:
+                    handle_low_hr(user_id, bpm, user_id)
+                else:
+                    save_event(user_id, "INFO", "RECOVER_DIRECT", "심박 정상화로 세션 종료")
+                    low_hr_sessions.pop(user_id, None)
+            else:
+                if bpm < LOW_HR_THRESHOLD:
+                    handle_low_hr(user_id, bpm, user_id)
+
+    msg = json.dumps({"user_id": user_id, "state": state})
+    for ws in list(ws_clients):
+        await ws.send_text(msg)
+
+    return {"status": "ok"}
+
+
+# ============================================================
+# 웹소켓
+# ============================================================
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    ws_clients.append(ws)
+
+    for user_id, state in current_state.items():
+        await ws.send_text(json.dumps({
+            "user_id": user_id,
+            "state": state,
+        }))
+
+    try:
+        while True:
+            await ws.receive_text()
+    except:
+        pass
+    finally:
+        ws_clients.remove(ws)
+
+
+# ============================================================
+# HTML
+# ============================================================
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("index.html", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
+# ============================================================
+# MAIN
+# ============================================================
+if __name__ == "__main__":
+    print("🚀 Central Server Started (Low HR + SQLite + Event Log + SOLAPI)")
+    save_event(None, "INFO", "SERVER_START", "서버 시작")
+    send_telegram_alert("🧪 심박수 알림 서버 시작")
+    send_sms_solapi("[서버 시작] 심박수 알림 서버 시작")
+    uvicorn.run(app, host="0.0.0.0", port=9000)
